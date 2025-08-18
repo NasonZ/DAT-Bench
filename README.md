@@ -237,7 +237,7 @@ MIT License. See `LICENSE` for details.
 @software{dat_bench,
   title = {DAT-Bench: Statistical Benchmark for Divergent Thinking in LLMs},
   author = {Nason Zikayo},
-  year = {2024},
+  year = {2025},
   url = {https://github.com/NasonZ/DAT-Bench}
 }
 ```
