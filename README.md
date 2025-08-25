@@ -1,6 +1,6 @@
 # DAT Bench 🧠
 
-**A benchmark for measuring divergent thinking and creativity in language models using the Divergent Association Task (DAT).**
+**Benchmarks for *divergent thinking* in LLMs - starting with DAT, then adding decomposition that stays comparable to standard baselines.**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![UV](https://img.shields.io/badge/uv-latest-green.svg)](https://github.com/astral-sh/uv)
@@ -8,236 +8,340 @@
 
 ---
 
-## Overview
+## Why this repo
 
-`divergent_bench` implements the **Divergent Association Task (DAT)** to measure creative thinking in language models. The DAT asks models to generate 10 words that are as different from each other as possible, then scores them based on semantic distance.
+Most benchmarks test facts, logic, or chain-of-thought. **DAT Bench** asks a complementary question:
 
-### Key Features
+> **Do models that think more *divergently* produce better *decompositions*  and therefore more thoughtful answers/plans**
 
-- 📊 **Production-ready visualizations** with statistical rigor (Cohen's d, multiple comparison correction)
-- 🤖 **Multi-provider support**: OpenAI, Ollama, OpenRouter, and local models
-- 📈 **Advanced analytics**: Ridge plots, statistical heatmaps, word frequency analysis
-- 🔬 **Statistically sound**: Proper handling of small samples, outliers, and multiple comparisons
-- 🎯 **Strategy testing**: Compare different prompting strategies (random, thesaurus, etymology, opposites)
+We begin with a solid implementation of the **Divergent Association Task (DAT)** and extend to **diversity-primed decomposition** that looks like normal query/task decomposition, but explicitly asks for **orthogonal** ideas to avoid overlap and blind spots.
+
+* **DAT** - measures raw divergent capacity (semantic distance across 10 words).
+* **QD-DP** *(planned)* - *Query Decomposition - Diversity-Primed* (standard QD with an orthogonality objective).
+* **TD-DP** *(planned)* - *Task Decomposition - Diversity-Primed* (standard plan/approach tree with diversity across top-level approaches).
+
+The point: stay **comparable** to common baselines while testing whether a light push toward diversity actually helps.
 
 ---
 
-## Quick Start
+## What’s here today
+
+* ✅ **DAT scorer** (GloVe by default; embeddings are pluggable).
+* ✅ **Visualizations** (ridge plots, statistical heatmaps, word-frequency analysis).
+* ✅ **Honest stats** (effect sizes, multiple-comparison correction, small-n warnings).
+* ✅ **Multi-provider hooks** (OpenAI, Ollama, OpenRouter; easy to add others).
+
+Next up: QD-DP / TD-DP runners, datasets, and metrics that reuse the same analytics/plots so comparisons stay apples-to-apples.
+
+---
+
+## Key features
+
+* 📊 **Production-grade analytics** - Cohen's *d*, Holm/Bonferroni/FDR corrections, bootstrap CIs (in progress).
+* 🤖 **Multi-provider support** - OpenAI, Ollama, OpenRouter, and local models.
+* 🧪 **Strategy testing** - compare prompting strategies (none, competitive, DAT_instructions, random).
+* 🧭 **Comparable decomposition tracks** - standard workflows with an explicit **orthogonality** goal (planned).
+* 🧱 **Extensible design** - shared runners, scoring and plotting across tracks.
+
+---
+
+## Quick start
 
 ### Prerequisites
 
-- Python 3.10+
-- [UV](https://github.com/astral-sh/uv) package manager
-- GloVe embeddings for scoring (auto-downloaded)
+* Python **3.10+**
+* [UV](https://github.com/astral-sh/uv)
+* GloVe embeddings (auto-downloaded on first use)
 
-### Installation
+### Install
 
 ```bash
-# Clone the repository
 git clone https://github.com/NasonZ/DAT-Bench.git
 cd DAT-Bench
 
-# Create virtual environment with UV
 uv venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
-# Install dependencies
 uv pip install -e .
-
-# Download GloVe embeddings (required for DAT scoring)
-# These will be downloaded automatically on first run if not present
 ```
 
-## Usage
+---
 
-### Running DAT Experiments
+## Usage - DAT benchmark (available)
 
 ```bash
-# Run with OpenAI GPT
-uv run python scripts/run_dat.py --provider openai --model gpt-5-mini --strategy random --samples 10
+# OpenAI
+uv run python scripts/run_dat.py \
+  --provider openai --model gpt-5-mini \
+  --strategy random --samples 10
 
-# Run with Ollama local model
-uv run python scripts/run_dat.py --provider ollama --model llama3.2:3b --strategy thesaurus --samples 20
+# Ollama (local)
+uv run python scripts/run_dat.py \
+  --provider ollama --model llama3.2:3b \
+  --strategy competitive --samples 20
 
-# Run with custom temperature
-uv run python scripts/run_dat.py --provider ollama --model qwen:4b --strategy random --temperature 0.7 --samples 15
+# Custom temperature
+uv run python scripts/run_dat.py \
+  --provider ollama --model qwen3:4b \
+  --strategy random --temperature 0.7 --samples 15
 
-# Run with OpenRouter
+# OpenRouter
 export OPENROUTER_API_KEY="your-key"
-uv run python scripts/run_dat.py --provider openrouter --model meta-llama/llama-3.1-8b-instruct --samples 10
+uv run python scripts/run_dat.py \
+  --provider openrouter --model meta-llama/llama-3.1-8b-instruct --samples 10
 ```
 
-### Visualizing Results
-
-```bash
-# Generate all visualizations from results directory
-uv run python scripts/test_visualization.py
-
-# Visualizations are saved to visualizations/ directory:
-# - test_ridge_plot.png: Distribution comparison with rug plots for small samples
-# - test_statistical_heatmap.png: Pairwise comparisons with effect sizes
-# - test_word_frequency_stacked.png: Word usage patterns across models
-```
-
-### Using as a Library
+### Use as a library
 
 ```python
 from divergent_bench.dat.scorer import DATScorer
 from divergent_bench.llm import create_provider
 from divergent_bench.experiments.runner import DATExperiment
 
-# Initialize provider and scorer
-provider = create_provider("openai", model="gpt-4-turbo")
+provider = create_provider("openai", model="gpt-5.1-mini")
 scorer = DATScorer()
 
-# Run experiment
 experiment = DATExperiment(provider, scorer)
 results = experiment.run(strategy="random", num_samples=10)
 
-# Analyze results
 print(f"Mean DAT score: {results['mean_score']:.2f}")
 print(f"Best words: {results['best_sample']['words']}")
 ```
 
 ---
 
-## Visualization Examples
+## Decomposition tracks (planned) - *diversity-primed, still standard*
 
-### Ridge Plots
-- Shows score distributions across models
-- Rug plots display actual data points for n≤10
-- Visual warnings for small samples (red: n<10, orange: n<30)
-- Robust x-axis limits using 1st-99th percentiles
+These tracks keep the familiar decomposition workflow; they simply ask the model to make the parts **as different as possible** to improve coverage.
 
-### Statistical Heatmaps
-- Dual panel: performance bars + significance matrix
-- Cohen's d effect sizes or t-statistics
-- Multiple comparison correction (Holm, Bonferroni, FDR)
-- Clear significance indicators (*, **, ***)
+### QD-DP - Query Decomposition (Diversity-Primed)
 
-### Word Frequency Analysis
-- Stacked bar charts showing model attribution
-- Multiple normalization modes (per-word, total, raw counts)
-- Visual insights into convergent vs divergent patterns
+* **Input:** a complex question (e.g., “How should the UK address the housing crisis?”).
+* **Output:** *k* **orthogonal** sub-questions -> brief answers (2–3 sentences each) -> a short synthesis referencing sub-question IDs.
+* **Scoring (automatic):**
 
----
+  * **Orthogonality** - dispersion of sub-questions in embedding space.
+  * **Coverage** - greedy match to a small YAML **topic map** per prompt; average matched similarity.
+  * **Redundancy penalty** - share of pairs above a similarity threshold (e.g., 0.85).
+  * **Synthesis rubric** - 0–5 for Structure, Coverage, Trade-offs, Specificity, Calibration (lightweight judge or rules).
 
-## Project Structure
+### TD-DP - Task Decomposition (Diversity-Primed)
 
-```
-divergent_bench/
-├── divergent_bench/           # Main package
-│   ├── dat/                  # DAT implementation
-│   │   ├── scorer.py         # Semantic distance scoring
-│   │   └── prompts.py        # Strategy-specific prompts
-│   ├── llm/                  # LLM integrations
-│   │   ├── providers.py      # OpenAI, Ollama, OpenRouter
-│   │   ├── base.py          # Base provider interface
-│   │   └── responses.py     # Response parsing
-│   ├── experiments/          # Experiment runners
-│   │   └── runner.py        # DAT experiment orchestration
-│   └── visualization/        # Analysis and plotting
-│       ├── loader.py        # Result loading and preparation
-│       ├── plots.py         # Ridge, heatmap, word frequency
-│       └── styles.py        # Consistent visual styling
-├── scripts/                  # CLI tools
-│   ├── run_dat.py           # Main experiment runner
-│   └── test_visualization.py # Visualization generator
-├── results/                  # Experiment outputs (JSON)
-└── visualizations/          # Generated plots (PNG)
-```
+* **Input:** a complex task (policy, product, infra, ML, etc.).
+* **Output:** *m* **distinct** top-level approaches -> pick one -> compact **plan tree** (depth 2–3) with risks & checks.
+* **Scoring (LLM-as-judge with rubrics):**
 
-## Statistical Features
+  * **Approach diversity** - dispersion across approach summaries.
+  * **Actionability** - rubric evaluating task specificity, dependencies, success criteria, and executability.
+  * **Risk assessment** - rubric scoring risk identification, relevance, mitigation strategies, and coverage.
+  * **Consistency** - child->parent semantic alignment.
 
-### Multiple Comparison Correction
-- **Holm** (default): Controls FWER, more powerful than Bonferroni
-- **Bonferroni**: Conservative FWER control
-- **Benjamini-Hochberg**: FDR control for many comparisons
+### Baselines & A/B
 
-### Effect Size Interpretation
-- **d ≈ 0.2**: Small effect
-- **d ≈ 0.5**: Medium effect
-- **d ≈ 0.8**: Large effect
-- **d > 1.0**: Very large effect
-
-### Sample Size Handling
-- **n < 10**: Unreliable results with red warning + rug plot
-- **n < 30**: Limited power with orange warning
-- **n ≥ 30**: Generally reliable for parametric tests
+* **Baseline:** standard decomposition (no diversity prompt).
+* **Treatment:** diversity-primed decomposition (orthogonality prompt).
+* **Report:** effect sizes for coverage/orthogonality/synthesis quality with multiple-comparison control.
 
 ---
 
-## Current Results
+## Visualizations
 
-Latest benchmark results (as of 2025-08):
+### Ridge plots (DAT now; reused for QD/TD scores)
 
-| Model | Mean DAT Score | Std Dev | n |
-|-------|---------------|---------|---|
-| llama3.2:3b | 85.1 | 3.2 | 9 |
-| gpt-5-mini | 80.8 | 4.5 | 3 |
-| gpt-5-nano | 77.1 | 0.9 | 8 |
-| gpt-4.1-nano | 75.4 | 4.4 | 3 |
-| Qwen3-4B | 72.7 | 4.1 | 44 |
+* Distributions per model/strategy
+* Rug plots for small *n* (≤10)
+* Small-sample warnings (red: *n*<10, orange: *n*<30)
+* Robust axes via 1st–99th percentiles
 
-*Higher scores indicate more divergent/creative thinking*
+### Statistical heatmaps
+
+* Performance bars + significance matrix
+* Effect sizes or *t*-stats
+* Holm/Bonferroni/FDR corrections
+
+### Word frequency analysis (DAT)
+
+* Stacked bars showing which models generated which words
+* Multiple normalization modes (raw counts, per-word attribution, total percentage)
+* Visual identification of convergence (many models -> same word) vs divergence (unique words per model)
+
+---
+
+## Project structure
+
+```
+DAT-Bench/
+├── divergent_bench/
+│   ├── dat/                      # DAT implementation (available)
+│   │   ├── __init__.py
+│   │   └── scorer.py
+│   ├── llm/                      # LLM provider adapters
+│   │   ├── __init__.py
+│   │   ├── client.py
+│   │   ├── config.py
+│   │   └── providers.py
+│   ├── metrics/                  # Divergence metrics
+│   │   ├── __init__.py
+│   │   ├── dsi.py                # Divergent Semantic Integration
+│   │   └── lziv.py               # Lempel-Ziv complexity
+│   ├── experiments/
+│   │   └── runner.py             # DAT experiment orchestration
+│   ├── visualization/
+│   │   ├── __init__.py
+│   │   ├── loader.py
+│   │   ├── plots.py
+│   │   ├── styles.py
+│   │   └── README.md
+│   ├── config/
+│   │   └── strategies.py         # Prompting strategies config
+│   ├── decomposition/            # (planned) QD/TD implementations
+│   │   └── __init__.py
+│   └── utils/
+│       └── __init__.py
+├── docs/
+│   ├── api/
+│   │   └── structured-output.md
+│   └── development/
+│       ├── ROADMAP.md
+│       ├── cli-implementation.md
+│       └── technical-notes.md
+├── tests/
+│   ├── unit/
+│   │   ├── test_dat_scorer.py
+│   │   ├── test_metrics.py
+│   │   └── test_model_detection.py
+│   └── integration/
+│       ├── test_api_endpoints.py
+│       ├── test_end_to_end.py
+│       ├── test_ollama_models.py
+│       └── test_structured_output.py
+├── scripts/
+│   ├── run_dat.py
+│   ├── demo.py
+│   ├── run_qd.py                 # (planned)
+│   └── run_td.py                 # (planned)
+├── datasets/                     # (planned) YAML topic maps / plan rubrics
+│   ├── qd/                       # e.g., housing_crisis_v1.yml
+│   └── td/                       # e.g., rag_mvp_v1.yml
+├── judges/                       # (planned) small rubric evaluators
+├── results/                      # (will be created on first run)
+├── visualizations/               # (will be created on first run)
+├── pyproject.toml
+├── uv.lock
+├── CHANGELOG.md
+└── LICENSE
+```
+
+---
+
+## Scoring at a glance
+
+### DAT (implemented)
+
+* **Score:** Average cosine distance between all pairs of words (first 7 valid words from 10 provided) × 100. Range: 0-200.
+
+### QD-DP (planned)
+
+* **Orthogonality:** Calculates average pairwise distance between all sub-questions
+* **Coverage:** greedy matching of sub-questions to topic-map items -> average matched similarity.
+* **Redundancy:** Count percentage of question pairs that are too similar (`share of pairs with `cos_sim > τ`).
+* **Composite (tunable):** e.g., `0.4*coverage + 0.4*orthogonality − 0.2*redundancy`.
+
+### TD-DP (planned)
+
+* **Approach diversity:** dispersion across `approaches.summary`.
+* **Actionability:** LLM/human-judged rubric for executability and completeness.
+* **Risk assessment:** LLM/human-judged rubric for risk quality and mitigation.
+
+All tracks report effect sizes and apply multiple-comparison correction for honest leaderboards.
+
+---
+
+## Statistical features
+
+* **Multiple-comparison control:** Holm (default), Bonferroni, Benjamini–Hochberg.
+* **Effect sizes:** Cohen’s *d* (small≈0.2, medium≈0.5, large≈0.8, very large>1.0).
+* **Small-sample handling:** warnings & rug plots; bootstrap CIs (planned).
+
+---
+
+## Current results (DAT)
+
+*Snapshot (Aug 2025). Higher is better.*
+
+| Model        | Mean DAT | Std Dev | n  |
+| ------------ | -------- | ------- | -- |
+| llama3.2:3b  | 85.1     | 3.2     | 9  |
+| gpt-5-mini   | 80.8     | 4.5     | 3  |
+| gpt-5-nano   | 77.1     | 0.9     | 8  |
+| gpt-4.1-nano | 75.4     | 4.4     | 3  |
+| Qwen3-4B     | 72.7     | 4.1     | 44 |
 
 ---
 
 ## Roadmap
 
 ### Immediate (In Progress)
-- [ ] Fix CLI argument parsing for batch experiments
-- [ ] Implement batch runner for systematic comparisons
-- [ ] Add bootstrap confidence intervals for small samples
-- [ ] Create model leaderboard with statistical significance
+- Fix CLI argument parsing for batch experiments
+- Implement batch runner for systematic comparisons
+- Create model leaderboard with statistical significance
 
 ### Near-term
-- [ ] Phoenix arize for better telemetry collection
-- [ ] Support for Anthropic Claude models
-- [ ] Export visualizations to interactive HTML
+- Phoenix/Arize integration for telemetry collection
+- Support for Anthropic Claude models
+- Export visualizations to interactive HTML
+- **QD/TD Divergent Bench implementation:**
+  - Query Decomposition with diversity-priming (QD-DP)
+  - Task Decomposition with diversity-priming (TD-DP)
+  - Orthogonality/coverage/redundancy metrics
+  - A/B comparisons vs standard decomposition
 
 ### Long-term
-- [ ] Multi-language DAT (beyond English)
-- [ ] Alternative creativity metrics
-- [ ] Integration with other creativity benchmarks
-- [ ] Real-time streaming evaluation
+- RL environment for divergent thinking training
+- **Diverge → Decompose → Converge** track (full creative pipeline)
+- Multi-language DAT (beyond English)
+- Alternative creativity metrics (e.g., Alternative Uses Task, Remote Associates Test)
 
 ---
 
 ## Contributing
 
-We welcome contributions! Key areas:
+Contributions welcome! Especially:
 
-- Adding new LLM providers
-- Improving statistical methods
-- Enhancing visualizations
-- Documentation and examples
-- Bug fixes and optimizations
+* New providers, strategies, and prompt variants
+* Better small-sample statistics
+* Visualization polish
+* **Datasets**: topic maps (QD) and plan rubrics (TD)
+* Lightweight judge rubrics/parsers
+* Bug fixes and performance improvements
 
 Please ensure:
-1. Tests pass: `pytest tests/`
-2. Code is formatted: `black . && ruff check .`
-3. Types check: `mypy divergent_bench/`
+
+1. Tests: `pytest tests/`
+2. Style: `black . && ruff check .`
+3. Types: `mypy divergent_bench/`
 
 ---
 
 ## References
 
-- Olson et al. (2021). *Naming unrelated words predicts creativity.* PNAS.
-- Pennington et al. (2014). *GloVe: Global Vectors for Word Representation.*
-- Cohen (1988). *Statistical Power Analysis for the Behavioral Sciences.*
+* Olson et al. (2021). *Naming unrelated words predicts creativity.* PNAS.
+* Pennington et al. (2014). *GloVe: Global Vectors for Word Representation.*
+* Cohen (1988). *Statistical Power Analysis for the Behavioral Sciences.*
+
+---
 
 ## License
 
-MIT License. See `LICENSE` for details.
+MIT - see `LICENSE`.
 
 ## Citation
 
 ```bibtex
-@software{dat_bench,
-  title = {DAT-Bench: Statistical Benchmark for Divergent Thinking in LLMs},
+@software{divergent_bench,
+  title  = {DAT Bench: Divergent Thinking and Diversity-Primed Decomposition Benchmarks for LLMs},
   author = {Nason Zikayo},
-  year = {2025},
-  url = {https://github.com/NasonZ/DAT-Bench}
+  year   = {2025},
+  url    = {https://github.com/NasonZ/DAT-Bench}
 }
 ```
