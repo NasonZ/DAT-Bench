@@ -37,7 +37,7 @@ Next up: QD-DP / TD-DP runners, datasets, and metrics that reuse the same analyt
 
 ## Key features
 
-* 📊 **Production-grade analytics** - Cohen's *d*, Holm/Bonferroni/FDR corrections, bootstrap CIs (in progress).
+* 📊 **Statistical analytics** - Cohen's *d*, Holm/Bonferroni/FDR corrections, bootstrap CIs (in progress).
 * 🤖 **Multi-provider support** - OpenAI, Ollama, OpenRouter, and local models.
 * 🧪 **Strategy testing** - compare prompting strategies (none, competitive, DAT_instructions, random).
 * 🧭 **Comparable decomposition tracks** - standard workflows with an explicit **orthogonality** goal (planned).
