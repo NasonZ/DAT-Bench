@@ -98,7 +98,7 @@ from divergent_bench.dat.scorer import DATScorer
 from divergent_bench.llm import create_provider
 from divergent_bench.experiments.runner import DATExperiment
 
-provider = create_provider("openai", model="gpt-5.1-mini")
+provider = create_provider("openai", model="gpt-5-mini")
 scorer = DATScorer()
 
 experiment = DATExperiment(provider, scorer)
