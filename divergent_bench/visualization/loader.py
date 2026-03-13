@@ -255,6 +255,119 @@ def aggregate_by_condition(df: pd.DataFrame) -> pd.DataFrame:
     return agg_df
 
 
+def load_verifiers_results(path: Union[str, Path]) -> pd.DataFrame:
+    """
+    Load results from verifiers' results.jsonl format into DAT-Bench DataFrame.
+
+    Converts verifiers' RolloutOutput records into the same schema used by
+    the standalone experiment runner, so all existing visualization functions
+    (ridge_plot, statistical_heatmap, etc.) work without modification.
+
+    Args:
+        path: Path to a verifiers results.jsonl file
+
+    Returns:
+        DataFrame compatible with prepare_data / ridge_plot / etc.
+    """
+    import re
+
+    path = Path(path)
+    rows = []
+
+    with open(path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            # Extract completion text
+            completion = obj.get("completion", [])
+            content = ""
+            if completion:
+                last_msg = completion[-1]
+                if isinstance(last_msg, dict):
+                    content = last_msg.get("content", "")
+
+            # Parse words from completion text
+            words = _parse_words_from_text(content)
+
+            # Extract metadata
+            metrics = obj.get("metrics", {})
+            info = obj.get("info", {})
+            if isinstance(info, str):
+                try:
+                    info = json.loads(info)
+                except (json.JSONDecodeError, TypeError):
+                    info = {}
+
+            rows.append(
+                {
+                    "model": obj.get("task", "unknown"),
+                    "score": metrics.get("_raw_dat_score", metrics.get("raw_dat_score", None)),
+                    "words": words,
+                    "num_valid_words": int(
+                        metrics.get("_num_valid_words", metrics.get("num_valid_words", 0))
+                    ),
+                    "strategy": info.get("strategy", "none"),
+                    "temperature": 0.7,  # from env default; override from metadata if available
+                    "reward": obj.get("reward"),
+                    "example_id": obj.get("example_id"),
+                    "source_file": path.name,
+                }
+            )
+
+    if not rows:
+        logger.warning(f"No results loaded from {path}")
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows)
+    df["score"] = pd.to_numeric(df["score"], errors="coerce")
+    df["display_model"] = df["model"]
+
+    logger.info(f"Loaded {len(df)} verifiers results from {path.name}")
+    return df
+
+
+def _parse_words_from_text(text: str) -> list:
+    """Extract word list from raw completion text (shared helper)."""
+    import re
+
+    if not text:
+        return []
+
+    cleaned = re.sub(r"\*+([^*]+)\*+", r"\1", text)
+    cleaned = re.sub(r"^\d+[.):\s]+", "", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"^[-*\u2022]\s*", "", cleaned, flags=re.MULTILINE)
+
+    words = []
+    for line in cleaned.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        if " - " in line:
+            word = line.split(" - ")[0].strip()
+        elif ":" in line:
+            word = line.split(":")[0].strip()
+        else:
+            word = line
+        word = re.sub(r"[^\w\s-]", "", word).strip().lower()
+        skip = {"provide", "diverse", "words", "nouns", "here", "list", "following"}
+        if word and len(word) > 1 and not any(s in word for s in skip):
+            words.append(word)
+
+    if len(words) < 5 and "," in text:
+        comma_words = [re.sub(r"[^\w\s-]", "", w).strip().lower() for w in text.split(",")]
+        comma_words = [w for w in comma_words if w and len(w) > 1 and w.isalpha()]
+        if len(comma_words) >= len(words):
+            words = comma_words
+
+    return words[:10]
+
+
 def add_temperature_category(df: pd.DataFrame) -> pd.DataFrame:
     """
     Add temperature category column for easier filtering.

@@ -336,6 +336,11 @@ class OpenAICompatibleClient(BaseLLMClient):
         parse_params = dict(params)
         parse_params.pop('stream', None)  # parse() doesn't support streaming
         
+        # Remove reasoning-specific parameters
+        reasoning_params = ['reasoning_effort', 'reasoning_summary', 'reasoning']
+        for param in reasoning_params:
+            parse_params.pop(param, None)
+        
         # Handle tool_choice: only include if tools are also present
         if 'tool_choice' in parse_params and 'tools' not in parse_params:
             parse_params.pop('tool_choice', None)
@@ -359,6 +364,12 @@ class OpenAICompatibleClient(BaseLLMClient):
             import instructor
         except ImportError:
             raise ImportError("Instructor is required for structured output with non-OpenAI providers. Install with: pip install instructor")
+        
+        # Remove reasoning-specific parameters
+        params = dict(params)
+        reasoning_params = ['reasoning_effort', 'reasoning_summary', 'reasoning']
+        for param in reasoning_params:
+            params.pop(param, None)
         
         # Use modern from_provider for standard providers with known endpoints
         # Fall back to from_openai for custom/local endpoints
@@ -391,6 +402,12 @@ class OpenAICompatibleClient(BaseLLMClient):
     
     async def _regular_generate(self, params: Dict) -> LLMResponse:
         """Generate regular completion without structured output."""
+        # Remove reasoning-specific parameters that may have been passed
+        params = dict(params)
+        reasoning_params = ['reasoning_effort', 'reasoning_summary', 'reasoning']
+        for param in reasoning_params:
+            params.pop(param, None)
+        
         response = await self._client.chat.completions.create(**params)
         
         # Extract message

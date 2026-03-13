@@ -49,4 +49,6 @@ Thumbs.db
 data/embeddings/
 *.log
 results/
-results_/
+results_*/
+visualizations/
+_visualizations/

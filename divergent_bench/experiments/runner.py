@@ -12,7 +12,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from ..llm import create_llm_client
-from ..config.strategies import DAT_STRATEGIES, CREATIVE_PROMPTS, DEFAULT_TEMPERATURES
+from ..config.strategies import DAT_STRATEGIES, DEFAULT_TEMPERATURES
 from ..dat.scorer import DATScorer
 
 

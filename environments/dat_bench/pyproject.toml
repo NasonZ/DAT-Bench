@@ -1,0 +1,22 @@
+[project]
+name = "dat-bench"
+version = "0.1.0"
+tags = ["single-turn", "creativity", "eval"]
+license = "MIT"
+description = "Divergent Association Task benchmark for measuring verbal creativity in LLMs, scored via GloVe 840B cosine distances."
+dependencies = [
+    "verifiers>=0.1.8",
+    "divergent-bench",
+    "datasets",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["dat_bench.py", "pyproject.toml"]
+
+[tool.verifiers.eval]
+num_examples = 30
+rollouts_per_example = 1
