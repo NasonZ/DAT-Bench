@@ -1,0 +1,31 @@
+# DAT-Bench multi-model evaluation via verifiers
+# Usage: prime eval run configs/eval/dat-benchmark.toml
+
+num_examples = 30
+rollouts_per_example = 1
+save_results = true
+
+[[eval]]
+env_id = "dat-bench"
+model = "gpt-4.1-mini"
+env_args = {strategy = "DAT_instructions"}
+
+[[eval]]
+env_id = "dat-bench"
+model = "gpt-4.1"
+env_args = {strategy = "DAT_instructions"}
+
+[[eval]]
+env_id = "dat-bench"
+model = "claude-sonnet-4-5-20250514"
+env_args = {strategy = "DAT_instructions"}
+
+[[eval]]
+env_id = "dat-bench"
+model = "claude-haiku-3-5-20241022"
+env_args = {strategy = "DAT_instructions"}
+
+[[eval]]
+env_id = "dat-bench"
+model = "deepseek-chat"
+env_args = {strategy = "DAT_instructions"}
