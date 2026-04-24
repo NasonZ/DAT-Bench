@@ -1,41 +1,62 @@
 # DAT-Bench 🧠
 
-Benchmarks for divergent thinking in LLMs — starting with the Divergent Association Task, with decomposition tracks planned.
+DAT-Bench instruments divergent word choice in LLMs.
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+It starts with the Divergent Association Task (DAT): generate 10 nouns that are as semantically distant from each other as possible. Responses are scored with GloVe 840B cosine distances and exposed as `verifiers`-compatible reward signals for evaluation and RL training.
 
-## Motivation
+The first track is implemented. Decomposition tracks are planned.
 
-Most benchmarks test facts, logic, or chain-of-thought. DAT-Bench asks a complementary question:
+## Why this exists
 
-> Do models that think more divergently produce better decompositions — and therefore more thoughtful answers?
+Most model benchmarks reward correctness, instruction following, or reasoning over fixed targets. DAT-Bench asks a narrower complementary question:
 
-We start with the **Divergent Association Task (DAT)**, a validated measure of verbal creativity where subjects generate 10 words as semantically different from each other as possible. Scores are computed via GloVe 840B cosine distances. We then plan to extend to **diversity-primed decomposition** — standard query/task decomposition with an explicit orthogonality objective.
+> Can a rewardable measure of divergent thinking improve how models explore, decompose, and cover open-ended tasks?
 
-## Current state
+DAT is the first instrument. It gives a cheap, repeatable signal for semantic divergence: not whether the model knows an answer, but whether it can move across distant regions of word space while staying within task constraints.
 
-**DAT benchmark** — implemented and integrated with [verifiers](https://github.com/willccbb/verifiers) for RL training and eval.
+The planned decomposition tracks test whether that diversity objective carries over from word choice to task structure.
 
-- DAT scorer (GloVe 840B cosine distances)
-- Composite reward rubric (creativity, validity, format compliance)
-- Training environment (XMLParser + format reward signal)
-- Eval environment (Pydantic structured output for deterministic parsing)
-- Multi-provider support (OpenAI, Anthropic, Ollama, OpenRouter)
-- Statistical visualisations (ridge plots, significance matrices, effect sizes)
-- Hand-curated fixture dataset for pipeline validation
+## Current status
 
-**Planned** — QD-DP (query decomposition, diversity-primed) and TD-DP (task decomposition, diversity-primed). See [Decomposition tracks](#decomposition-tracks-planned) below.
+Implemented:
 
-## Quick start
+- DAT scorer using GloVe 840B cosine distances
+- Composite `verifiers` rubric for evaluation and RL training
+- Training environment with XML output and format reward
+- Eval environment with Pydantic structured output
+- Multi-provider experiment runner: OpenAI, Anthropic, Ollama, OpenRouter
+- Prompting strategies for DAT trials
+- Statistical visualisations: ridge plots, significance matrices, effect sizes
+- Hand-curated fixtures for pipeline validation
 
-### Prerequisites
+Planned:
+
+- QD-DP: query decomposition with an explicit diversity objective
+- TD-DP: task decomposition with an explicit diversity objective
+- Word-chain trajectory benchmark for graph-navigation strategy analysis
+
+## Requirements
 
 - Python 3.10+
-- [UV](https://github.com/astral-sh/uv)
-- GloVe 840B embeddings (set `GLOVE_PATH` env var, or place in `data/embeddings/`)
+- [`uv`](https://github.com/astral-sh/uv)
+- GloVe 840B embeddings
+- A word list compatible with the scorer
 
-### Install
+Set the embedding and word-list paths with environment variables:
+
+```bash
+export GLOVE_PATH=/path/to/glove.840B.300d.txt
+export WORDS_PATH=/path/to/words.txt
+```
+
+The scorer also checks:
+
+```text
+data/embeddings/glove.840B.300d.txt
+data/words.txt
+```
+
+## Install
 
 ```bash
 git clone https://github.com/NasonZ/DAT-Bench.git
@@ -46,30 +67,49 @@ source .venv/bin/activate
 uv pip install -e .
 ```
 
-## Usage
-
-### CLI
+For development:
 
 ```bash
-# OpenAI
-uv run python scripts/run_dat.py \
-  --provider openai --model gpt-5-mini \
-  --strategy competitive --samples 20
-
-# Ollama (local)
-uv run python scripts/run_dat.py \
-  --provider ollama --model llama3.2:3b \
-  --strategy random --samples 15
-
-# OpenRouter
-export OPENROUTER_API_KEY="your-key"
-uv run python scripts/run_dat.py \
-  --provider openrouter --model meta-llama/llama-3.1-8b-instruct --samples 10
+uv pip install -e ".[dev]"
+pytest
 ```
 
-### Verifiers integration
+## Run DAT experiments
 
-DAT-Bench is a verifiers environment. Two loaders for different use cases:
+OpenAI:
+
+```bash
+uv run python scripts/run_dat.py \
+  --provider openai \
+  --model gpt-5-mini \
+  --strategy competitive \
+  --samples 20
+```
+
+Ollama:
+
+```bash
+uv run python scripts/run_dat.py \
+  --provider ollama \
+  --model llama3.2:3b \
+  --strategy random \
+  --samples 15
+```
+
+OpenRouter:
+
+```bash
+export OPENROUTER_API_KEY="..."
+
+uv run python scripts/run_dat.py \
+  --provider openrouter \
+  --model meta-llama/llama-3.1-8b-instruct \
+  --samples 10
+```
+
+## Use as a verifiers environment
+
+DAT-Bench exposes two environment loaders.
 
 ```python
 from environments.dat_bench.dat_bench import load_environment, load_eval_environment
@@ -81,93 +121,169 @@ train_env = load_environment(strategy="competitive", num_examples=50)
 eval_env = load_eval_environment(strategy="DAT_instructions", num_examples=30)
 ```
 
-The rubric provides composite reward signals for RL training:
+Training uses XML because format compliance is part of the reward signal. Eval uses structured output so parsing is handled by the provider instead of the model.
+
+The rubric exposes these reward signals:
 
 | Signal | Weight | Purpose |
-|---|---|---|
-| `creativity_reward` | 1.0 | Normalized DAT score (primary gradient) |
-| `validity_reward` | 0.2 | Fraction of words in GloVe vocabulary |
-| `format_reward` | 0.1 | XML format compliance (training only) |
-| `raw_dat_score` | 0.0 | Raw score for analysis (0-200 scale) |
+|---|---:|---|
+| `creativity_reward` | 1.0 | Normalised DAT score; primary reward |
+| `validity_reward` | 0.2 | Fraction of generated words in the GloVe vocabulary |
+| `format_reward` | 0.1 | XML format compliance; training only |
+| `raw_dat_score` | 0.0 | Raw DAT score for analysis |
 | `valid_word_count` | 0.0 | Count of valid words for analysis |
 
-### Scorer directly
+## Score words directly
 
 ```python
 from divergent_bench import DATScorer
 
 scorer = DATScorer()
-score = scorer.dat(["whale", "hammer", "symphony", "cactus", "glacier",
-                     "umbrella", "passport", "volcano", "whistle", "tapestry"])
-print(f"DAT score: {score:.1f}")  # ~90
+score = scorer.dat([
+    "whale", "hammer", "symphony", "cactus", "glacier",
+    "umbrella", "passport", "volcano", "whistle", "tapestry",
+])
+
+print(f"DAT score: {score:.1f}")
 ```
 
-## Strategies
+## DAT scoring
 
-Four prompting strategies, each testing a different framing:
+DAT score is the average cosine distance between all pairs of the first 7 valid unique words, multiplied by 100.
+
+```text
+score = mean(pairwise_cosine_distance(first_7_valid_words)) * 100
+```
+
+Higher scores indicate greater semantic distance between the generated words. The reward normalises raw DAT scores to `[0, 1]` with a linear map over the empirical range `[40, 100]`.
+
+This is not a general creativity score. It is a specific measure of semantic divergence under a constrained word-generation task.
+
+## Prompting strategies
 
 | Strategy | Temperature | Description |
-|---|---|---|
-| `none` | 0.7 | Minimal instructions — baseline |
+|---|---:|---|
+| `none` | 0.7 | Minimal instructions; baseline |
 | `competitive` | 0.7 | Prize framing with tips for maximising distance |
-| `DAT_instructions` | 0.7 | Full task context from the original DAT paper |
+| `DAT_instructions` | 0.7 | Full task context from the original DAT framing |
 | `random` | 1.0 | Explicit randomness instruction |
 
-## Scoring
+## Decomposition tracks
 
-DAT score = average cosine distance between all pairs of the first 7 valid words (out of 10 provided), multiplied by 100. Range: 0-200. Higher is more creative.
+DAT is the first track because it provides a concrete reward for divergence. The planned decomposition tracks ask whether the same pressure helps models cover more of an open problem.
 
-The rubric normalises raw scores to 0-1 using a linear map from the empirical range [40, 100].
+### QD-DP: Query Decomposition, Diversity-Primed
 
-## Decomposition tracks (planned)
+Given a complex question, generate orthogonal sub-questions, answer each, and synthesise the result.
 
-These tracks keep familiar decomposition workflows but ask the model to make sub-parts as different as possible, improving coverage.
+Candidate metrics:
 
-**QD-DP** (Query Decomposition, Diversity-Primed) — given a complex question, generate orthogonal sub-questions, answer each, synthesise. Scored on orthogonality, coverage against a topic map, and redundancy penalty.
+- orthogonality between sub-questions
+- coverage against a topic map
+- redundancy penalty
+- answer quality after synthesis
 
-**TD-DP** (Task Decomposition, Diversity-Primed) — given a complex task, generate distinct top-level approaches, pick one, build a plan tree. Scored on approach diversity, actionability, and risk assessment via LLM-as-judge rubrics.
+### TD-DP: Task Decomposition, Diversity-Primed
 
-Both tracks will include standard (non-diversity-primed) baselines and report effect sizes with multiple-comparison correction.
+Given a complex task, generate distinct top-level approaches, select one, and build a plan tree.
+
+Candidate metrics:
+
+- approach diversity
+- actionability
+- risk coverage
+- plan quality via judge rubric
+
+Both tracks should include standard non-diversity-primed baselines and report effect sizes with multiple-comparison correction.
+
+## Word-chain trajectory benchmark
+
+A word-chain benchmark is planned as a separate trajectory task.
+
+DAT scores a final set of words. Word-chain would score a path through a fully observable word graph: each step changes one word by insertion, deletion, or substitution. This makes model strategy visible, not just final performance.
+
+Candidate signals:
+
+- chain length
+- valid transition rate
+- bridge pattern frequency
+- turning-angle distribution
+- word-length oscillation
+- local graph density along the path
+
+The design note is in [`docs/research/word-chain-trajectory-benchmark-design.md`](docs/research/word-chain-trajectory-benchmark-design.md).
 
 ## Project structure
 
-```
+```text
 DAT-Bench/
 ├── divergent_bench/
-│   ├── dat/                          # DAT scorer (GloVe cosine distances)
-│   ├── rubrics/                      # Verifiers-compatible reward rubrics
-│   ├── config/                       # Prompting strategies, model configs
-│   ├── data/                         # Fixture datasets for validation
-│   ├── experiments/                  # Experiment runner, structured output
-│   ├── llm/                          # Multi-provider client adapters
-│   ├── metrics/                      # Divergence metrics (DSI, LZiv)
-│   ├── visualization/                # Ridge plots, heatmaps, stats
-│   ├── decomposition/               # (planned) QD/TD implementations
+│   ├── dat/                          # DAT scorer
+│   ├── rubrics/                      # verifiers-compatible reward rubrics
+│   ├── config/                       # prompting strategies and model configs
+│   ├── data/                         # fixtures for validation
+│   ├── experiments/                  # experiment runner
+│   ├── llm/                          # provider clients
+│   ├── metrics/                      # DSI and Lempel-Ziv metrics
+│   ├── visualization/                # plots, styles, loaders
+│   ├── decomposition/                # planned QD/TD implementations
 │   └── utils/
 ├── environments/
-│   └── dat_bench/                    # Verifiers environment definition
-│       ├── dat_bench.py              # load_environment / load_eval_environment
-│       └── pyproject.toml
+│   └── dat_bench/                    # verifiers environment definition
 ├── configs/
-│   └── eval/                         # Eval configuration (TOML)
+│   └── eval/                         # eval configuration
 ├── docs/
-│   ├── research/                     # Alignment plans, design docs
-│   ├── api/                          # API integration notes
-│   └── development/                  # Roadmap, technical notes
+│   ├── research/                     # alignment plans and benchmark designs
+│   ├── api/                          # structured-output notes
+│   └── development/                  # roadmap and technical notes
 ├── tests/
-│   ├── unit/                         # Scorer, fixture, metric tests
-│   └── integration/                  # API, e2e, provider tests
-├── scripts/                          # CLI entry points
+│   ├── unit/
+│   └── integration/
+├── scripts/
 ├── pyproject.toml
 └── LICENSE
 ```
 
 ## Statistical features
 
-- **Multiple-comparison control** — Holm (default), Bonferroni, Benjamini-Hochberg
-- **Effect sizes** — Cohen's *d* with standard thresholds
-- **Small-sample handling** — adaptive rendering (strip/box/violin by *n*), CI capping, low-*n* warnings
-- **Colorblind-safe palette** — validated via Coblis simulator
+- Multiple-comparison control: Holm by default, plus Bonferroni and Benjamini-Hochberg
+- Effect sizes: Cohen's *d* with standard thresholds
+- Small-sample handling: adaptive rendering, CI capping, low-*n* warnings
+- Colourblind-safe palette validated with Coblis
+
+## Current limitations
+
+- The DAT scorer requires local GloVe 840B embeddings and a word list.
+- Decomposition tracks are not implemented yet.
+- Word-chain is a design document, not an implemented environment.
+- The packaged console entry point in `pyproject.toml` points to `divergent_bench.cli:app`; that module is not currently present. Use `scripts/run_dat.py` for now.
+
+## Development
+
+Run tests:
+
+```bash
+pytest
+```
+
+Run a focused test:
+
+```bash
+pytest tests/unit/test_dat_scorer.py
+```
+
+Run integration tests:
+
+```bash
+pytest tests/integration
+```
+
+Useful docs:
+
+- [`docs/research/verifiers-alignment-plan.md`](docs/research/verifiers-alignment-plan.md)
+- [`docs/research/word-chain-trajectory-benchmark-design.md`](docs/research/word-chain-trajectory-benchmark-design.md)
+- [`docs/development/ROADMAP.md`](docs/development/ROADMAP.md)
+- [`docs/api/structured-output.md`](docs/api/structured-output.md)
 
 ## References
 
@@ -181,11 +297,11 @@ DAT-Bench/
 @software{divergent_bench,
   title  = {DAT-Bench: Divergent Thinking Benchmarks for LLMs},
   author = {Nason Zikayo},
-  year   = {2025},
+  year   = {2026},
   url    = {https://github.com/NasonZ/DAT-Bench}
 }
 ```
 
 ## License
 
-MIT — see `LICENSE`.
+MIT. See [`LICENSE`](LICENSE).
