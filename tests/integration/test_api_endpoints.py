@@ -1,6 +1,7 @@
 import asyncio
-import os
 import inspect
+import os
+
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
@@ -14,34 +15,39 @@ class TestOutput(BaseModel):
 
 async def test_api_endpoints():
     """Test API endpoints and parameter handling"""
-    client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key or api_key.startswith("test-"):
+        import pytest
+        pytest.skip("OPENAI_API_KEY not configured for live API integration test")
+
+    client = AsyncOpenAI(api_key=api_key)
     model = os.getenv("LLM_MODEL", "gpt-4.1-mini")
-    
+
     print(f"Testing with model: {model}")
     print("=" * 60)
-    
+
     # 1. Check parse() method parameters
     print("\n1. Inspecting parse() method:")
     parse_method = client.beta.chat.completions.parse
     parse_sig = inspect.signature(parse_method)
     print(f"   Signature: {parse_sig}")
     print(f"   Parameters: {list(parse_sig.parameters.keys())}")
-    
+
     # Get docstring if available
     if parse_method.__doc__:
         print(f"   Docstring snippet: {parse_method.__doc__[:200]}...")
-    
+
     # 2. Check create() method parameters
     print("\n2. Inspecting create() method:")
     create_method = client.chat.completions.create
     create_sig = inspect.signature(create_method)
     print(f"   Parameters: {list(create_sig.parameters.keys())}")
-    
+
     # 3. Test parse() with various parameters
     print("\n3. Testing parse() parameter acceptance:")
-    
+
     messages = [{"role": "user", "content": "Say hello and number 42"}]
-    
+
     # Test cases with different parameter combinations
     test_cases = [
         {
@@ -116,7 +122,7 @@ async def test_api_endpoints():
             }
         },
     ]
-    
+
     for test_case in test_cases:
         try:
             print(f"\n   Testing: {test_case['name']}")
@@ -135,7 +141,7 @@ async def test_api_endpoints():
                 print(f"      ✗ Failed: Parameter '{param_name}' not accepted")
             else:
                 print(f"      ✗ Failed: {type(e).__name__}: {error_msg[:80]}...")
-    
+
     # 4. Test reasoning model constraints (if applicable)
     if "o4-mini" in model:
         print("\n4. Testing o4-mini model constraints:")
@@ -148,7 +154,7 @@ async def test_api_endpoints():
             print("   ✗ Temperature accepted (unexpected for o1)")
         except Exception as e:
             print(f"   ✓ Temperature rejected as expected: {type(e).__name__}")
-    
+
     # 5. Check what parameters are actually used in AGE's codebase
     print("\n5. Common parameters usage:")
     print("   - From runners/agents: model, temperature, max_tokens, tools, tool_choice")

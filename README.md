@@ -76,10 +76,16 @@ pytest
 
 ## Run DAT experiments
 
+List available prompting strategies:
+
+```bash
+uv run divergent-bench strategies
+```
+
 OpenAI:
 
 ```bash
-uv run python scripts/run_dat.py \
+uv run divergent-bench run \
   --provider openai \
   --model gpt-5-mini \
   --strategy competitive \
@@ -89,7 +95,7 @@ uv run python scripts/run_dat.py \
 Ollama:
 
 ```bash
-uv run python scripts/run_dat.py \
+uv run divergent-bench run \
   --provider ollama \
   --model llama3.2:3b \
   --strategy random \
@@ -99,9 +105,9 @@ uv run python scripts/run_dat.py \
 OpenRouter:
 
 ```bash
-export OPENROUTER_API_KEY="..."
+export OPENROUTER_API_KEY="***"
 
-uv run python scripts/run_dat.py \
+uv run divergent-bench run \
   --provider openrouter \
   --model meta-llama/llama-3.1-8b-instruct \
   --samples 10
@@ -218,6 +224,7 @@ The design note is in [`docs/research/word-chain-trajectory-benchmark-design.md`
 ```text
 DAT-Bench/
 ├── divergent_bench/
+│   ├── cli.py                       # packaged command-line interface
 │   ├── dat/                          # DAT scorer
 │   ├── rubrics/                      # verifiers-compatible reward rubrics
 │   ├── config/                       # prompting strategies and model configs
@@ -256,7 +263,6 @@ DAT-Bench/
 - The DAT scorer requires local GloVe 840B embeddings and a word list.
 - Decomposition tracks are not implemented yet.
 - Word-chain is a design document, not an implemented environment.
-- The packaged console entry point in `pyproject.toml` points to `divergent_bench.cli:app`; that module is not currently present. Use `scripts/run_dat.py` for now.
 
 ## Development
 

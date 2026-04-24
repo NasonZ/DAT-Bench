@@ -3,7 +3,7 @@
 PURPOSE:
 --------
 This test suite validates Ollama models for compatibility with the divergent_bench system,
-specifically testing their ability to generate creative word lists for the Divergent 
+specifically testing their ability to generate creative word lists for the Divergent
 Association Task (DAT). Since Ollama supports hundreds of open-weight models with
 varying capabilities, this suite helps identify which models work with structured
 output (Pydantic) and which require fallback text parsing.
@@ -83,16 +83,15 @@ EXTENDING THIS TEST:
 - Export results: Implement CSV/JSON export in test fixtures
 """
 
-import asyncio
 import os
-import pytest
-from typing import List
-from pydantic import BaseModel, Field
-from dotenv import load_dotenv
 
-from divergent_bench.llm import create_llm_client
+import pytest
+from dotenv import load_dotenv
+from pydantic import BaseModel, Field
+
 from divergent_bench.config.strategies import DAT_STRATEGIES
 from divergent_bench.dat.scorer import DATScorer
+from divergent_bench.llm import create_llm_client
 
 # Load environment variables
 load_dotenv()
@@ -100,7 +99,7 @@ load_dotenv()
 
 class DATWords(BaseModel):
     """Structured output for DAT word generation."""
-    words: List[str] = Field(
+    words: list[str] = Field(
         description="List of exactly 10 single English nouns that are as different from each other as possible",
         min_length=10,
         max_length=10
@@ -111,12 +110,12 @@ class DATWords(BaseModel):
 @pytest.mark.ollama
 class TestOllamaModels:
     """Test Ollama model compatibility with divergent thinking tasks."""
-    
+
     @pytest.fixture
     def ollama_url(self):
         """Get Ollama URL from environment or use default."""
         return os.getenv("OLLAMA_BASE_URL", "http://172.24.32.1:11434/v1")
-    
+
     @pytest.mark.asyncio
     @pytest.mark.parametrize("model", [
         pytest.param("llama3.2:3b", id="llama3.2:3b"),
@@ -125,7 +124,7 @@ class TestOllamaModels:
     ])
     async def test_ollama_model_structured_output(self, ollama_url, model):
         """Test if Ollama model supports structured output for DAT task.
-        
+
         This test validates:
         1. Model can be initialized
         2. Structured output works OR fallback parsing works
@@ -134,18 +133,18 @@ class TestOllamaModels:
         # Skip if Ollama not available
         if not await self._is_ollama_available(ollama_url):
             pytest.skip(f"Ollama not available at {ollama_url}")
-        
+
         # Create client
         os.environ["OLLAMA_BASE_URL"] = ollama_url
         client = create_llm_client(provider="ollama", model=model)
-        
+
         # Use the standard DAT prompt
         prompt = DAT_STRATEGIES["none"]
-        
+
         # Test structured output
         structured_success = False
         words = None
-        
+
         try:
             # Try structured output first
             result = await client.generate(
@@ -154,7 +153,7 @@ class TestOllamaModels:
                 temperature=0.7,
                 max_tokens=200
             )
-            
+
             if isinstance(result, DATWords):
                 words = [w.lower() for w in result.words]
                 structured_success = True
@@ -162,19 +161,19 @@ class TestOllamaModels:
                 print(f"   Words: {', '.join(words[:5])}...")
         except Exception as e:
             print(f"\n⚠️  {model}: Structured output failed: {str(e)[:100]}")
-        
+
         # Fallback to text parsing if structured failed
         if not structured_success:
             try:
                 response = await client.generate(
                     messages=[{
-                        "role": "user", 
+                        "role": "user",
                         "content": prompt + "\n\nProvide ONLY 10 words as a comma-separated list."
                     }],
                     temperature=0.7,
                     max_tokens=100
                 )
-                
+
                 # Parse response
                 words = self._parse_word_list(response.content)
                 if len(words) >= 10:
@@ -182,42 +181,42 @@ class TestOllamaModels:
                     print(f"   Words: {', '.join(words[:5])}...")
                 else:
                     print(f"❌ {model}: Fallback parsing incomplete ({len(words)} words)")
-                    
+
             except Exception as e:
                 pytest.fail(f"{model}: Both structured and fallback failed: {e}")
-        
+
         # Validate output quality
         if words and len(words) >= 7:
             scorer = DATScorer()
             score = scorer.dat(words[:10])
             print(f"   DAT Score: {score:.2f}")
-            
+
             # Assert minimum quality
             assert score is not None, f"{model}: DAT scoring failed"
             assert score > 50, f"{model}: DAT score too low ({score:.2f})"
-            
+
             # Log performance characteristics
             self._log_model_performance(model, structured_success, score)
-    
+
     @pytest.mark.asyncio
     async def test_ollama_model_custom(self, ollama_url, request):
         """Test a custom Ollama model specified via command line.
-        
+
         Usage: pytest tests/integration/test_ollama_models.py::TestOllamaModels::test_ollama_model_custom --model=your-model:tag
         """
         model = request.config.getoption("--model", default=None)
         if not model:
             pytest.skip("No model specified. Use --model=model-name:tag")
-        
+
         await self.test_ollama_model_structured_output(ollama_url, model)
-    
-    def _parse_word_list(self, response: str) -> List[str]:
+
+    def _parse_word_list(self, response: str) -> list[str]:
         """Parse words from text response."""
         import re
-        
+
         # Clean response
         cleaned = response.lower().strip()
-        
+
         # Try comma-separated first
         if ',' in cleaned:
             words = [w.strip() for w in cleaned.split(',')]
@@ -225,7 +224,7 @@ class TestOllamaModels:
             words = [w for w in words if w and w.isalpha()]
             if len(words) >= 10:
                 return words[:10]
-        
+
         # Try line-by-line
         lines = cleaned.split('\n')
         words = []
@@ -236,9 +235,9 @@ class TestOllamaModels:
             word = re.sub(r'[^a-z].*', '', line)
             if word and word.isalpha():
                 words.append(word)
-        
+
         return words[:10]
-    
+
     async def _is_ollama_available(self, url: str) -> bool:
         """Check if Ollama is running and accessible."""
         import httpx
@@ -248,9 +247,9 @@ class TestOllamaModels:
                 base_url = url.replace('/v1', '')
                 response = await client.get(f"{base_url}/api/tags", timeout=2.0)
                 return response.status_code == 200
-        except:
+        except Exception:
             return False
-    
+
     def _log_model_performance(self, model: str, structured: bool, score: float):
         """Log model performance for comparison."""
         # In a real scenario, this could write to a CSV or database
@@ -265,33 +264,36 @@ async def test_ollama_fallback_mechanism():
     """Test that fallback parsing works when structured output fails."""
     # This tests the fallback mechanism specifically
     from divergent_bench.llm.providers import OpenAICompatibleClient
-    
+
     # Use the URL from environment
     ollama_url = os.getenv("OLLAMA_BASE_URL", "http://172.24.32.1:11434/v1")
     os.environ["OLLAMA_BASE_URL"] = ollama_url
-    
+
+    if not await TestOllamaModels()._is_ollama_available(ollama_url):
+        pytest.skip(f"Ollama not available at {ollama_url}")
+
     client = OpenAICompatibleClient(
         provider="ollama",
         model="llama3.2:3b",
         api_key="ollama"
     )
-    
+
     # Test with a prompt that might challenge structured output
     complex_prompt = """
     Generate 10 words that are maximally different from each other.
-    Consider multiple dimensions: concrete/abstract, living/non-living, 
+    Consider multiple dimensions: concrete/abstract, living/non-living,
     natural/artificial, large/small, etc.
     """
-    
+
     response = await client.generate(
         messages=[{"role": "user", "content": complex_prompt}],
         temperature=0.7,
         max_tokens=200
     )
-    
+
     assert response.content is not None
     assert len(response.content) > 0
-    
+
     # Check that we can parse something from it
     words = []
     for line in response.content.split('\n'):
@@ -302,6 +304,6 @@ async def test_ollama_fallback_mechanism():
             word = re.sub(r'[^a-z]+', '', line.lower())
             if word and len(word) > 2:
                 words.append(word)
-    
+
     # We should get at least some words
     assert len(words) > 0, "Failed to parse any words from response"
